@@ -1,48 +1,88 @@
 package com.digi.digihello.testdigi.controleurs;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import com.digi.digihello.testdigi.service.Ville;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/villes")
-// Mapping de la classe sur l'URL /villes
 public class VilleControleur {
 
-     private List<Ville> villes = new ArrayList<>();
+    private List<Ville> villes = new ArrayList<>();
+    private int nextId = 0; // Otomatik artan ID için başlangıç değeri
 
-    // Exemple d'initialisation de quelques villes
+    // Initialisation de quelques villes
     public VilleControleur() {
-        villes.add(new Ville("Istanbul", 15636243));
-        villes.add(new Ville("Ankara", 5310000));
-        villes.add(new Ville("Izmir", 3056000));
+        villes.add(new Ville(nextId++, "Istanbul", 15636243));
+        villes.add(new Ville(nextId++, "Ankara", 5310000));
+        villes.add(new Ville(nextId++, "Izmir", 3056000));
     }
 
+    // Récupérer toutes les villes
     @GetMapping
     public List<Ville> getVilles() {
+        // ID'ye göre sıralama
+        villes.sort(Comparator.comparingInt(Ville::getId));
         return villes;
     }
 
-    // Méthode pour ajouter une nouvelle ville
+    // Trouver une ville par son ID
+    @GetMapping("/{id}")
+    public ResponseEntity<Ville> getVilleById(@PathVariable int id) {
+        Optional<Ville> ville = villes.stream().filter(v -> v.getId() == id).findFirst();
+        if (ville.isPresent()) {
+            return new ResponseEntity<>(ville.get(), HttpStatus.OK);
+        } else {
+            return new ResponseEntity<>(null, HttpStatus.NOT_FOUND);
+        }
+    }
+
+    // Ajouter une nouvelle ville avec un PUT (Vérification de l'unicité de l'ID)
     @PutMapping("/ajouter")
     public ResponseEntity<String> ajouterVille(@RequestBody Ville nouvelleVille) {
-        // Vérification si une ville avec le même nom existe déjà
+        // ID kontrolü
         for (Ville ville : villes) {
-            if (ville.getNom().equalsIgnoreCase(nouvelleVille.getNom())) {
-                return new ResponseEntity<>("La ville existe déjà", HttpStatus.BAD_REQUEST);
+            if (ville.getId() == nouvelleVille.getId()) {
+                return new ResponseEntity<>("L'identifiant existe déjà", HttpStatus.CONFLICT);
             }
         }
 
-        // Si la ville n'existe pas, elle est ajoutée à la liste
+        // Yeni ID ataması
+        nouvelleVille.setId(nextId++);
         villes.add(nouvelleVille);
-        return new ResponseEntity<>("Ville insérée avec succès", HttpStatus.OK);
+        return new ResponseEntity<>("Ville insérée avec succès", HttpStatus.CREATED);
+    }
+
+    // Modifier une ville avec un POST basé sur l'ID
+    @PostMapping("/modifier/{id}")
+    public ResponseEntity<String> modifierVille(@PathVariable int id, @RequestBody Ville updatedVille) {
+        for (Ville ville : villes) {
+            if (ville.getId() == id) {
+                ville.setNom(updatedVille.getNom());
+                ville.setNbHabitants(updatedVille.getNbHabitants());
+                return new ResponseEntity<>("Ville modifiée avec succès", HttpStatus.OK);
+            }
+        }
+
+        return new ResponseEntity<>("Ville non trouvée", HttpStatus.NOT_FOUND);
+    }
+
+    // Supprimer une ville par son ID
+    @DeleteMapping("/supprimer/{id}")
+    public ResponseEntity<String> supprimerVille(@PathVariable int id) {
+        boolean removed = villes.removeIf(v -> v.getId() == id);
+
+        if (removed) {
+            return new ResponseEntity<>("Ville supprimée avec succès", HttpStatus.OK);
+        } else {
+            return new ResponseEntity<>("Ville non trouvée", HttpStatus.NOT_FOUND);
+        }
     }
 }
